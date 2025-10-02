@@ -1,0 +1,5 @@
+{
+  "name": "AI 表情包生成器",
+  "description": "一個允許用戶上傳人像照片，並使用 AI 生成多張不同表情的表情包圖片的應用程式。",
+  "requestFramePermissions": []
+}
