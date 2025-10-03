@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Part } from "@google/genai";
 
 const API_KEY = process.env.API_KEY;
 
@@ -8,30 +8,78 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
+interface ImageData {
+  data: string;
+  mimeType: string;
+}
+
 /**
  * Generates a meme image by modifying an existing image with a text prompt.
  * Uses the 'gemini-2.5-flash-image' model.
  * @param base64Image The base64 encoded string of the source image (without data URI prefix).
  * @param mimeType The MIME type of the source image.
- * @param prompt The text prompt describing the desired expression.
+ * @param expressionPrompt The text prompt describing the desired expression.
+ * @param backgroundPrompt The text prompt describing the desired background.
+ * @param clothingPrompt The text prompt describing the desired clothing.
+ * @param actionPrompt The text prompt describing the desired pose or action.
+ * @param backgroundImage Optional image data for the background.
+ * @param clothingImage Optional image data for the clothing.
+ * @param enhanceConsistency A boolean to toggle stricter consistency prompts.
  * @returns A promise that resolves to the base64 string of the generated image.
  */
-export const generateMemeImage = async (base64Image: string, mimeType: string, prompt: string): Promise<string> => {
+export const generateMemeImage = async (
+  base64Image: string,
+  mimeType: string,
+  expressionPrompt: string,
+  backgroundPrompt: string,
+  clothingPrompt: string,
+  actionPrompt: string,
+  backgroundImage: ImageData | null,
+  clothingImage: ImageData | null,
+  enhanceConsistency: boolean
+): Promise<string> => {
   try {
+    const parts: Part[] = [
+      { inlineData: { data: base64Image, mimeType: mimeType } },
+    ];
+
+    let textPrompt = `基於第一張圖片中的人物，將其表情修改為 "${expressionPrompt}"。`;
+
+    if (actionPrompt) {
+      textPrompt += ` 同時，將人物的姿勢修改為 "${actionPrompt}"。`;
+    }
+
+    if (backgroundImage) {
+      parts.push({ inlineData: { data: backgroundImage.data, mimeType: backgroundImage.mimeType } });
+      textPrompt += ` 接著，將背景替換為第二張圖片的內容。`;
+      // Add a hint for natural interaction if the action prompt suggests it
+      if (actionPrompt.includes('坐') || actionPrompt.includes('躺') || actionPrompt.includes('靠')) {
+          textPrompt += ` 請確保人物與背景中的物體（例如沙發或椅子）能夠自然地互動。`;
+      }
+    } else if (backgroundPrompt) {
+      textPrompt += ` 接著，將背景更換為 "${backgroundPrompt}"。`;
+    }
+
+    if (clothingImage) {
+      parts.push({ inlineData: { data: clothingImage.data, mimeType: clothingImage.mimeType } });
+      const imageIndexText = backgroundImage ? "第三張" : "第二張";
+      textPrompt += ` 最後，將人物的服裝更換為${imageIndexText}圖片中的樣式。`;
+    } else if (clothingPrompt) {
+      textPrompt += ` 最後，將人物的服裝更換為 "${clothingPrompt}"。`;
+    }
+
+    if (enhanceConsistency) {
+        textPrompt += ' 核心要求：生成圖片中的人物，其臉部結構、五官比例、髮型和膚色，都必須與第一張原始圖片中的人物嚴格保持一致。絕對不要改變人物的身份。';
+    } else {
+        textPrompt += ' 請務必保持原始人物的臉部特徵和身份不變，生成一張自然、無違和感的圖片。';
+    }
+
+    parts.push({ text: textPrompt });
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: `將圖片中人物的表情修改為：${prompt}。請保留原始照片的背景和風格，只改變面部表情。`,
-          },
-        ],
+        parts: parts,
       },
       config: {
         responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -50,6 +98,6 @@ export const generateMemeImage = async (base64Image: string, mimeType: string, p
   } catch (error) {
     console.error("Gemini API call failed:", error);
     // Re-throw a more user-friendly error
-    throw new Error(`生成 "${prompt}" 表情圖片失敗，請重試。`);
+    throw new Error(`生成 "${expressionPrompt}" 表情圖片失敗，請重試。`);
   }
 };

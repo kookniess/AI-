@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
 import { ExpressionSelector } from './components/ExpressionSelector';
+import { StyleEditor } from './components/StyleEditor';
 import { ImageGrid } from './components/ImageGrid';
 import { GenerationList } from './components/GenerationList';
 import { generateMemeImage } from './services/geminiService';
@@ -15,6 +16,12 @@ export default function App() {
   const [selectedForDownload, setSelectedForDownload] = useState<string[]>([]);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [backgroundPrompt, setBackgroundPrompt] = useState<string>('');
+  const [clothingPrompt, setClothingPrompt] = useState<string>('');
+  const [backgroundImage, setBackgroundImage] = useState<UploadedImage | null>(null);
+  const [clothingImage, setClothingImage] = useState<UploadedImage | null>(null);
+  const [actionPrompt, setActionPrompt] = useState<string>('');
+  const [enhanceConsistency, setEnhanceConsistency] = useState<boolean>(true);
 
   const handleImageUpload = (file: File) => {
     const reader = new FileReader();
@@ -23,6 +30,11 @@ export default function App() {
       setGeneratedImages({});
       setSelectedExpressions([]);
       setSelectedForDownload([]);
+      setBackgroundPrompt('');
+      setClothingPrompt('');
+      setBackgroundImage(null);
+      setClothingImage(null);
+      setActionPrompt('');
       setError(null);
     };
     reader.onerror = () => {
@@ -44,8 +56,28 @@ export default function App() {
     const imageBase64 = uploadedImage.base64.split(',')[1];
     const mimeType = uploadedImage.file.type;
 
+    const backgroundImageData = backgroundImage ? {
+      data: backgroundImage.base64.split(',')[1],
+      mimeType: backgroundImage.file.type,
+    } : null;
+
+    const clothingImageData = clothingImage ? {
+      data: clothingImage.base64.split(',')[1],
+      mimeType: clothingImage.file.type,
+    } : null;
+
     try {
-      const newImageBase64 = await generateMemeImage(imageBase64, mimeType, prompt);
+      const newImageBase64 = await generateMemeImage(
+        imageBase64,
+        mimeType,
+        prompt,
+        backgroundPrompt,
+        clothingPrompt,
+        actionPrompt,
+        backgroundImageData,
+        clothingImageData,
+        enhanceConsistency
+      );
       const newImage: GeneratedImage = {
         id: `${prompt}-${Date.now()}`,
         prompt,
@@ -63,7 +95,7 @@ export default function App() {
     } finally {
       setGeneratingPrompt(null);
     }
-  }, [uploadedImage, generatingPrompt]);
+  }, [uploadedImage, generatingPrompt, backgroundPrompt, clothingPrompt, actionPrompt, backgroundImage, clothingImage, enhanceConsistency]);
   
   const handleDownloadSelected = useCallback(() => {
     selectedForDownload.forEach(id => {
@@ -94,6 +126,21 @@ export default function App() {
               defaultExpressions={DEFAULT_EXPRESSIONS}
               selectedExpressions={selectedExpressions}
               setSelectedExpressions={setSelectedExpressions}
+              isDisabled={!uploadedImage}
+            />
+            <StyleEditor
+              backgroundPrompt={backgroundPrompt}
+              setBackgroundPrompt={setBackgroundPrompt}
+              clothingPrompt={clothingPrompt}
+              setClothingPrompt={setClothingPrompt}
+              backgroundImage={backgroundImage}
+              setBackgroundImage={setBackgroundImage}
+              clothingImage={clothingImage}
+              setClothingImage={setClothingImage}
+              actionPrompt={actionPrompt}
+              setActionPrompt={setActionPrompt}
+              enhanceConsistency={enhanceConsistency}
+              setEnhanceConsistency={setEnhanceConsistency}
               isDisabled={!uploadedImage}
             />
           </div>
