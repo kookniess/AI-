@@ -5,7 +5,7 @@ import { ExpressionSelector } from './components/ExpressionSelector';
 import { StyleEditor } from './components/StyleEditor';
 import { ImageGrid } from './components/ImageGrid';
 import { GenerationList } from './components/GenerationList';
-import { generateMemeImage } from './services/geminiService';
+import { generateMemeImage, restoreOldPhoto } from './services/geminiService';
 import type { UploadedImage, GeneratedImage } from './types';
 import { DEFAULT_EXPRESSIONS } from './constants';
 
@@ -15,6 +15,7 @@ export default function App() {
   const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
   const [selectedForDownload, setSelectedForDownload] = useState<string[]>([]);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [backgroundPrompt, setBackgroundPrompt] = useState<string>('');
   const [clothingPrompt, setClothingPrompt] = useState<string>('');
@@ -48,7 +49,7 @@ export default function App() {
       setError("請先上傳一張圖片。");
       return;
     }
-    if (generatingPrompt) return; // Prevent multiple simultaneous generations
+    if (generatingPrompt || isRestoring) return;
 
     setGeneratingPrompt(prompt);
     setError(null);
@@ -95,7 +96,42 @@ export default function App() {
     } finally {
       setGeneratingPrompt(null);
     }
-  }, [uploadedImage, generatingPrompt, backgroundPrompt, clothingPrompt, actionPrompt, backgroundImage, clothingImage, enhanceConsistency]);
+  }, [uploadedImage, generatingPrompt, isRestoring, backgroundPrompt, clothingPrompt, actionPrompt, backgroundImage, clothingImage, enhanceConsistency]);
+
+  const handleRestorePhoto = useCallback(async () => {
+    if (!uploadedImage) {
+      setError("請先上傳一張圖片。");
+      return;
+    }
+    if (generatingPrompt || isRestoring) return;
+
+    setIsRestoring(true);
+    setError(null);
+    const prompt = '老照片修復';
+
+    const imageBase64 = uploadedImage.base64.split(',')[1];
+    const mimeType = uploadedImage.file.type;
+
+    try {
+      const newImageBase64 = await restoreOldPhoto(imageBase64, mimeType);
+      const newImage: GeneratedImage = {
+        id: `${prompt}-${Date.now()}`,
+        prompt,
+        base64: `data:image/png;base64,${newImageBase64}`,
+      };
+       setGeneratedImages(prev => ({ ...prev, [newImage.id]: newImage }));
+    } catch (err: any) {
+      const errorImage: GeneratedImage = {
+        id: `${prompt}-${Date.now()}`,
+        prompt,
+        base64: null,
+        error: err.message || 'Restoration failed',
+      };
+      setGeneratedImages(prev => ({ ...prev, [errorImage.id]: errorImage }));
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [uploadedImage, generatingPrompt, isRestoring]);
   
   const handleDownloadSelected = useCallback(() => {
     selectedForDownload.forEach(id => {
@@ -126,7 +162,9 @@ export default function App() {
               defaultExpressions={DEFAULT_EXPRESSIONS}
               selectedExpressions={selectedExpressions}
               setSelectedExpressions={setSelectedExpressions}
-              isDisabled={!uploadedImage}
+              isDisabled={!uploadedImage || !!generatingPrompt || isRestoring}
+              isRestoring={isRestoring}
+              onRestore={handleRestorePhoto}
             />
             <StyleEditor
               backgroundPrompt={backgroundPrompt}

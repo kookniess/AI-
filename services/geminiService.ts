@@ -101,3 +101,45 @@ export const generateMemeImage = async (
     throw new Error(`生成 "${expressionPrompt}" 表情圖片失敗，請重試。`);
   }
 };
+
+/**
+ * Restores an old photo by removing scratches, improving clarity, and colorizing if needed.
+ * @param base64Image The base64 encoded string of the source image.
+ * @param mimeType The MIME type of the source image.
+ * @returns A promise that resolves to the base64 string of the restored image.
+ */
+export const restoreOldPhoto = async (
+  base64Image: string,
+  mimeType: string
+): Promise<string> => {
+  try {
+    const textPrompt = "請修復這張老照片。移除照片上的刮痕、摺痕和瑕疵。提高清晰度、增強細節並校正顏色。如果原始照片是黑白的，請對其進行逼真的色彩化。請務必保持原始照片的構圖和人物身份不變。";
+
+    const parts: Part[] = [
+      { inlineData: { data: base64Image, mimeType: mimeType } },
+      { text: textPrompt },
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: parts,
+      },
+      config: {
+        responseModalities: [Modality.IMAGE, Modality.TEXT],
+      },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return part.inlineData.data;
+      }
+    }
+
+    throw new Error('API 回應中未包含圖片。');
+
+  } catch (error) {
+    console.error("Gemini API call for photo restoration failed:", error);
+    throw new Error('老照片修復失敗，請重試。');
+  }
+};
