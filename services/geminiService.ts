@@ -1,12 +1,8 @@
 import { GoogleGenAI, Modality, Part } from "@google/genai";
 
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-  throw new Error("API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// FIX: Adhere to the API key guideline. The API key must be obtained exclusively from `process.env.API_KEY`.
+// This also resolves the TypeScript error "Property 'env' does not exist on type 'ImportMeta'".
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface ImageData {
   data: string;
@@ -81,8 +77,9 @@ export const generateMemeImage = async (
       contents: {
         parts: parts,
       },
+      // FIX: The responseModalities for gemini-2.5-flash-image must be an array with a single Modality.IMAGE element.
       config: {
-        responseModalities: [Modality.IMAGE, Modality.TEXT],
+        responseModalities: [Modality.IMAGE],
       },
     });
 
@@ -125,8 +122,9 @@ export const restoreOldPhoto = async (
       contents: {
         parts: parts,
       },
+      // FIX: The responseModalities for gemini-2.5-flash-image must be an array with a single Modality.IMAGE element.
       config: {
-        responseModalities: [Modality.IMAGE, Modality.TEXT],
+        responseModalities: [Modality.IMAGE],
       },
     });
 
